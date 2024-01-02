@@ -1,18 +1,25 @@
 let dom_replay = document.querySelector("#replay");
 let dom_score = document.querySelector("#score");
 let dom_canvas = document.createElement("canvas");
-document.querySelector("#canvas").appendChild
-(dom_canvas);
+document.querySelector("#canvas").appendChild(dom_canvas);
 let CTX = dom_canvas.getContext("2d");
 
 const W = (dom_canvas.width = 500);
 const H = (dom_canvas.height = 500);
 
-let snake, food, currentHue, cells = 20, cellSize,
-isGameOver = false, tails = [], score = 0o0, maxScore = 
-window.localStorage.getItem("maxScore") || undefined,
-particles = [], splashingParticleCount = 20, cellsCount,
-requestID;
+let snake,
+  food,
+  currentHue,
+  cells = 20,
+  cellSize,
+  isGameOver = false,
+  tails = [],
+  score = 0o0,
+  maxScore = window.localStorage.getItem("maxScore") || undefined,
+  particles = [],
+  splashingParticleCount = 20,
+  cellsCount,
+  requestID;
 
 let helpers = {
     Vec: class{
@@ -71,11 +78,9 @@ let helpers = {
         if(hue == undefined){
             return[0, 0, 0];
         }
-        var chroma = 1 (1 - Math.abs(2 * lightness - 1))*
-        saturation;
+        var chroma = 1 (1 - Math.abs(2 * lightness - 1)) * saturation;
         var huePrime = hue / 60;
-        var secondComponent = chroma * (1 - Math.abs
-        ((huePrime % 2) - 1));
+        var secondComponent = chroma * (1 - Math.abs((huePrime % 2) - 1));
 
         huePrime = ~~huePrime;
         var red;
@@ -112,5 +117,167 @@ let helpers = {
         red += lightnessAdjustment;
         green += lightnessAdjustment;
         blue += lightnessAdjustment;
+
+        return [
+            Math.round(red * 255),
+            Math.round(green * 255),
+            Math.round(blue * 255)
+        ];
+    },
+    lerp(start, end, t){
+        return start * (1-t) + end *t;
+    }
+};
+
+let KEY = {
+    ArrowUp : false,
+    ArrowRight : false,
+    ArrowDown : false,
+    ArrowLeft : false,
+    resetState(){
+        this.ArrowUp = false;
+        this.ArrowRight = false;
+        this.ArrowDown = false;
+        this.ArrowLeft = false;
+    },
+    listen(){
+        addEventListener("keydown", (e) => {
+                if(e.key == "ArrowUp" && this.ArrowDown) return;
+                if(e.key == "ArrowDown" && this.ArrowUp) return;
+                if(e.key == "ArrowLeft" && this.ArrowRight) return;
+                if(e.key == "ArrowRight" && this.ArrowLeft) return;
+                this[e.key] = true;
+                Object.keys(this)
+                .filter((f) => f !== e.key && f !== "listen" && f !== "resetState")
+                .forEach((k) => {
+                    this[k] = false;
+                });
+            },
+            false
+        );
+    }
+};
+
+class Snake{
+    constructor(i, type){
+        this.pop = new helpers.Vec(W / 2, H / 2);
+        this.dir = new helpers.Vec(0, 0);
+        this.type = type;
+        this.index = i;
+        this.delay = 7;
+        this.size = W / cells;
+        this.color = "lightgreen";
+        this.history = [];
+        this.total = 1;
+    }
+    draw(){
+        let {x, y} = this.pos;
+        CTX.fillStyle = this.color;
+        CTX.shadowBlur = 20;
+        CTX.shadowColor = "rgba(255, 255, 255, .3)";
+        CTX.fillRect(x, y, this.size, this.size);
+        CTX.shadowBlur = 0;
+        if(this.total >= 2){
+            for(let i=0; i<this.history.length - 1; i++){
+                let {x, y} = this.history[i];
+                CTX.lineWidth = 1;
+                CTX.fillStyle = "lightgreen";
+                CTX.fillRect(x, y, this.size, this.size);
+                CTX.strokeStyle = "black";
+                CTX.strokeRect(x, y, this.size, this.size);
+            }
+        }
+    }
+    walls(){
+        let {x, y} = this.pop;
+        if(x + cellSize > W){
+            this.pos.x = 0;
+        }
+        if(y + cellSize > W){
+            this.pos.x = 0;
+        }
+        if( y < 0){
+            this.pos.y = H - cellSize;
+        }
+        if(x < 0){
+            this.pos.x = W - cellSize;
+        }
+    }
+    controls(){
+        let dir = this.size;
+        if(KEY.ArrowUp){
+            this.dir = new helpers.Vec(0, -dir);
+        }
+        if(KEY.ArrowDown){
+            this.dir = new helpers.Vec(0, dir);
+        }
+        if(KEY.ArrowLeft){
+            this.dir = new helpers.Vec(-dir, 0);
+        }
+        if(KEY.ArrowRight){
+            this.dir = new helpers.Vec(dir, 0);
+        }
+    }
+    selfCollision(){
+        for(let i=0; i<this.history.length; i++){
+            let p = this.history[i];
+            if(helpers.isCollision(this.pos, p)){
+                isGameOver = true;
+            }
+        }
+    }
+    update(){
+        this.walls();
+        this.draw();
+        this.controls;
+        if(!this.delay--){
+            if(helpers.isCollision(this.pos, food.pos)){
+                incrementScore();
+                particleSplash();
+                food.spawn();
+                this.total++;
+            }
+            this.history[this.total - 1] = new helpers.Vec(this.pos.x, this.pos.y);
+            for(let i=0; i<this.total-1; i++){
+                this.history[i] = this.history[i+1];
+            }
+            this.pos.add(this.dir);
+            this.delay = 7;
+            this.total > 3 ? this.selfCollision() : null;
+        }
+    }
+}
+
+class Food{
+    constructor(){
+        this.pop = new helpers.Vec(
+            ~~(Math.random() * cells) * cellSize,
+            ~~(Math.random() * cells) * cellSize
+        );
+        this.color = red;
+        this.size = cellSize;
+    }
+    draw(){
+        let {x, y} = this.pos;
+        CTX.globalCompositeOperation = "lighter";
+        CTX.shadowColor = this.color;
+        CTX.fillStyle = this.color;
+        CTX.beginPath();
+        CTX.arc(x + this.size / 2, y + this.size / 2,
+        this.size / 2, 0, Math.PI * 2);
+        CTX.fill();
+        CTX.globalCompositeOperation = "source-over";
+        CTX.shadowBlur = 0;
+    }
+    spawn(){
+        let randX = ~~(Math.random() * cells) * this.size;
+        let randy = ~~(Math.random() * cells) * this.size;
+        for(let path of snake.history){
+            if(helpers.isCollision(new helpers.Vec(randX, randY), path)){
+                return this.spawn();
+            }
+        }
+        this.color = "red";
+        this.pos = new helpers.Vec(randX, randY);
     }
 }
